@@ -7,7 +7,7 @@ from PIL import Image
 
 # 🇹🇷 Stable Diffusion modelini yükleyen fonksiyon
 # 🇬🇧 Function to load Stable Diffusion model
-def load_model(model_id="runwayml/stable-diffusion-v1-5"):
+def load_model(model_id="stable-diffusion-v1-5/stable-diffusion-v1-5"):
     """
     🇹🇷 HuggingFace üzerinden modeli yükler ve GPU/CPU'ya taşır.
     🇬🇧 Loads the model from HuggingFace and moves it to GPU or CPU.
