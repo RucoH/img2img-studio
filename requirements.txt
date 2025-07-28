@@ -1,0 +1,28 @@
+# 🇹🇷 Diffusion modelleri için temel kütüphane
+# 🇬🇧 Core library for diffusion models
+diffusers>=0.27.0
+
+# 🇹🇷 Metin çözücü ve model yönetimi
+# 🇬🇧 For prompt handling and Hugging Face models
+transformers>=4.40.0
+
+# 🇹🇷 GPU/CPU hızlandırması ve otomatik ayarlama
+# 🇬🇧 Acceleration and device management
+accelerate>=0.27.0
+
+# 🇹🇷 PyTorch: Derin öğrenme altyapısı (VRAM kullanımı için önemli)
+# 🇬🇧 PyTorch: Core deep learning framework (required for GPU use)
+torch>=2.2.0
+
+# 🇹🇷 Daha hızlı ve güvenli model ağırlıkları için
+# 🇬🇧 Faster & safer loading of model weights
+safetensors>=0.4.0
+
+# 🇹🇷 Görsel işlemler ve matematiksel işlemler için
+# 🇬🇧 For image pre/postprocessing
+scipy>=1.10.0
+Pillow>=10.0.0
+
+# 🇹🇷 Web arayüzü (img2img uygulaması için Gradio)
+# 🇬🇧 Gradio web UI for interactive app
+gradio>=4.22.0
