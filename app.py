@@ -52,8 +52,8 @@ demo = gr.Interface(
     outputs=gr.Image(type="pil", label="🖼️ Çıktı Görseli / Output Image"),
     title="🧠 img2img Studio",
     description=(
-        "🇹🇷 Bu uygulama, yüklediğiniz görsel üzerine metin tabanlı değişiklikler ekler.\n"
-        "🇬🇧 This app applies text-guided transformations to your uploaded image."
+        "🇹🇷 Bu uygulama, yüklediğiniz görsel üzerine metin tabanlı değişiklikler ekler."
+        "\n 🇬🇧 This app applies text-guided transformations to your uploaded image."
     ),
     allow_flagging="never"
 )
