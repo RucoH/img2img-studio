@@ -5,16 +5,12 @@
 This project allows users to apply **text-guided transformations (img2img)** to an input image to generate new outputs.
 Powered by Stable Diffusion-based models, it provides high-quality, detailed, and controllable image editing.
 
----
-
 ## ✨ Features
 
 * 🖼️ Image Upload & Live Preview
 * 📝 Prompt-Based Image Generation
 * 🎚️ Control over Strength & Guidance Scale
 * ⚙️ Automatic GPU/CPU Detection
-
----
 
 ## ⚙️ Installation
 
@@ -23,8 +19,6 @@ Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
-
----
 
 ## 🚀 Usage
 
@@ -35,8 +29,6 @@ python app.py
 ```
 
 Then open your browser at 👉 `http://127.0.0.1:7860`
-
----
 
 ## 🗂️ Project Structure
 
@@ -53,9 +45,7 @@ img2img-studio/
 
 Distributed under the [MIT License](LICENSE).
 
----
-
 ## 👤 Author
 
 * GitHub: [@RucoH](https://github.com/RucoH)
-* 🌐 Live Site: [https://rucoh.github.io/](https://rucoh.github.io/)
+* Live Site: [https://rucoh.github.io/](https://rucoh.github.io/)
