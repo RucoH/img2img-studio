@@ -1,64 +1,79 @@
-# 🇹🇷 Gerekli kütüphaneleri içe aktar
-# 🇬🇧 Import necessary libraries
+# app.py
+
+"""
+🇹🇷 Bu uygulama, Kandinsky 2.2 prior ve decoder pipeline'larını kullanarak img2img dönüşümleri gerçekleştirir.
+🇬🇧 This app uses Kandinsky 2.2 Prior and Decoder pipelines to perform img2img transformations.
+"""
 import gradio as gr
 from PIL import Image
 
-# 🇹🇷 pipeline.py içindeki fonksiyonları al
-# 🇬🇧 Import functions from pipeline.py
-from pipeline import load_model, img2img_generate
+from pipeline import load_pipelines, img2img_generate
 
-# 🇹🇷 Uygulama açılır açılmaz modeli bir kez yükle (startup)
-# 🇬🇧 Load the model once at startup
-pipe = load_model()
+# 🇹🇷 Uygulama açılır açılmaz prior ve decoder pipeline'larını yükle
+# 🇬🇧 Load the Prior and Decoder pipelines at startup
+prior_pipe, decoder_pipe = load_pipelines()
 
-
-# 🇹🇷 Gradio için görsel üretme fonksiyonu
-# 🇬🇧 Gradio image-generation function
-def generate_image(input_image, prompt, strength, guidance_scale):
+# 🇹🇷 Gradio için resim üretme fonksiyonu
+# 🇬🇧 Gradio image generation function
+def generate_image(
+    input_image: Image.Image,
+    prompt: str,
+    strength: float,
+    num_inference_steps: int,
+    guidance_scale: float
+) -> Image.Image | None:
     """
-    🇹🇷 Yüklenen görsel ve prompt ile img2img üretimi yapar.
-    🇬🇧 Generates a new image from the input image and prompt.
+    🇹🇷 Girdi görseli ve prompt ile Kandinsky img2img işlemeyi tetikler.
+    🇬🇧 Triggers Kandinsky img2img processing with the input image and prompt.
 
     Args:
-        input_image (PIL.Image or None): 🇹🇷 Kullanıcının yüklediği görsel
-                                         🇬🇧 User-uploaded image
-        prompt (str): 🇹🇷 Kullanıcının girdiği açıklayıcı metin
-                      🇬🇧 Text prompt from the user
-        strength (float): 🇹🇷 Görselden ne kadar sapılacağını belirler (0.1–1.0)
-                          🇬🇧 How much to transform the original image (0.1–1.0)
-        guidance_scale (float): 🇹🇷 Prompt uyum gücü (1.0–15.0)
-                                🇬🇧 Prompt adherence strength (1.0–15.0)
+        input_image: 🇹🇷 Kullanıcının yüklediği PIL Image / 🇬🇧 User-uploaded PIL Image
+        prompt: 🇹🇷 Dönüşüm için metin komutu / 🇬🇧 Text command for transformation
+        strength: 🇹🇷 Embedding gücü (0.0–1.0) / 🇬🇧 Embedding strength
+        num_inference_steps: 🇹🇷 Decoder adım sayısı / 🇬🇧 Number of decoder inference steps
+        guidance_scale: 🇹🇷 Prompt sadakati seviyesi / 🇬🇧 Level of prompt adherence
 
     Returns:
-        PIL.Image or None: 🇹🇷 Üretilen görsel veya None
-                           🇬🇧 Generated image or None
+        Image.Image | None: 🇹🇷 Üretilen görsel veya None / 🇬🇧 Generated image or None
     """
-    if input_image is None or prompt.strip() == "":
+    if input_image is None or not prompt.strip():
         return None
-    # img2img fonksiyonunu kullanarak yeni görsel üret
-    return img2img_generate(pipe, input_image, prompt, strength, guidance_scale)
-
+    try:
+        output = img2img_generate(
+            prior_pipe,
+            decoder_pipe,
+            input_image,
+            prompt,
+            strength=strength,
+            num_inference_steps=num_inference_steps,
+            guidance_scale=guidance_scale
+        )
+        return output
+    except Exception as e:
+        print(f"Error in img2img_generate: {e}")
+        return None
 
 # 🇹🇷 Gradio arayüzünü tanımla
 # 🇬🇧 Define the Gradio interface
-demo = gr.Interface(
+iface = gr.Interface(
     fn=generate_image,
     inputs=[
-        gr.Image(type="pil", label="🎨 Girdi Görseli / Input Image"),
-        gr.Textbox(label="📝 Prompt (örnek: fluffy cat with witch hat)"),
-        gr.Slider(0.1, 1.0, value=0.3, step=0.01, label="🎚️ Güç / Strength"),
-        gr.Slider(1.0, 15.0, value=8.5, step=0.1, label="🎯 Yönlendirme / Guidance Scale")
+        gr.Image(type="pil", label="🎨 Input Image / Girdi Görseli"),
+        gr.Textbox(label="📝 Prompt (örn: transform this cat into a wizard)", placeholder="E.g.: transform this car into a hovercraft"),
+        gr.Slider(0.0, 1.0, value=0.5, step=0.01, label="🔧 Embedding Strength / Strength"),
+        gr.Slider(10, 100, value=25, step=1, label="🔄 Inference Steps / Decoder Steps"),
+        gr.Slider(1.0, 15.0, value=7.5, step=0.1, label="🎯 Guidance Scale / Prompt Sadakati")
     ],
-    outputs=gr.Image(type="pil", label="🖼️ Çıktı Görseli / Output Image"),
-    title="🧠 img2img Studio",
+    outputs=gr.Image(type="pil", label="🖼️ Output Image / Çıktı Görseli"),
+    title="🧠 Kandinsky 2.2 Img2Img Studio",
     description=(
-        "🇹🇷 Bu uygulama, yüklediğiniz görsel üzerine metin tabanlı değişiklikler ekler."
-        "\n 🇬🇧 This app applies text-guided transformations to your uploaded image."
+        "🇹🇷 Kandinsky 2.2 prior ve decoder pipeline kullanılarak görselden görsel oluşturur."
+        "\n🇬🇧 Generates images from images using Kandinsky 2.2 Prior and Decoder pipelines."
     ),
     allow_flagging="never"
 )
 
-# 🇹🇷 Uygulamayı başlat
-# 🇬🇧 Launch the application
 if __name__ == "__main__":
-    demo.launch()
+    # 🇹🇷 Uygulamayı başlat
+    # 🇬🇧 Launch the app
+    iface.launch()

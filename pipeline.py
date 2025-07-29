@@ -1,93 +1,111 @@
 # pipeline.py
 
 """
-🇹🇷 Stable Diffusion img2img pipeline modülü:
-- Model yükleme
-- Img2img dönüşüm fonksiyonu
-🇬🇧 Stable Diffusion img2img pipeline module:
-- Model loading
-- Img2img generation function
+🇹🇷 Kandinsky 2.2 img2img modülü:
+- Prior pipeline ile görüntü embed’i oluşturma
+- Decoder pipeline ile img2img oluşturma
+🇬🇧 Kandinsky 2.2 img2img module:
+- Generates image embeddings using the Prior pipeline
+- Generates images using the Decoder pipeline
 """
 import os
-from diffusers import StableDiffusionImg2ImgPipeline
 import torch
+from diffusers import KandinskyV22PriorPipeline, KandinskyV22Img2ImgPipeline
 from PIL import Image
 
-# 🇹🇷 Hugging Face erişimi için token (gerekirse)
-# 🇬🇧 HF access token for private models (if needed)
+# 🇹🇷 Gated modellere erişim için token ( gerekiyorsa )
+# 🇬🇧 HF token for accessing gated models (if needed)
 HF_TOKEN = os.getenv("HF_TOKEN")
 
-# 🇹🇷 Modeli yükleyen fonksiyon
-# 🇬🇧 Function to load the Stable Diffusion img2img model
-def load_model(
-    model_id: str = "kandinsky-community/kandinsky-2-2-decoder"
-) -> StableDiffusionImg2ImgPipeline:
+# 🇹🇷 Tüm pipeline’ları yükler: prior ve decoder
+# 🇬🇧 Load both Prior and Decoder pipelines
+def load_pipelines(
+    prior_id: str = "kandinsky-community/kandinsky-2-2-prior",
+    decoder_id: str = "kandinsky-community/kandinsky-2-2-decoder"
+) -> tuple[KandinskyV22PriorPipeline, KandinskyV22Img2ImgPipeline]:
     """
-    🇹🇷 Varsayılan model "gsdf/Counterfeit-V2.5" olarak ayarlandı: yüksek detay, herkese açık.
-    🇬🇧 Default model set to "gsdf/Counterfeit-V2.5": high-detail, public.
-
-    Arg:
-        model_id (str): 🇹🇷 HF model identifier / 🇬🇧 HuggingFace model name
-
-    Returns:
-        StableDiffusionImg2ImgPipeline: 🇹🇷 Yüklenmiş pipeline / 🇬🇧 Loaded pipeline
+    🇹🇷 Prior ve Decoder pipeline’larını indirir ve cihaza taşır.
+    🇬🇧 Downloads Prior and Decoder pipelines and moves them to device.
     """
-    # 🇹🇷 Kimlik doğrulama token’ı ekle (private modelse)
-    # 🇬🇧 Include auth token if the model is private
     kwargs = {}
     if HF_TOKEN:
         kwargs["use_auth_token"] = HF_TOKEN
 
-    # 🇹🇷 Pipeline’i oluştur ve cihaza taşı
-    # 🇬🇧 Create the pipeline and move to device
-    pipe = StableDiffusionImg2ImgPipeline.from_pretrained(
-        model_id,
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    # 🇹🇷 Prior pipeline: prompt + image -> image_embeds, negative_image_embeds
+    # 🇬🇧 Prior pipeline: prompt + image -> image_embeds, negative_image_embeds
+    prior = KandinskyV22PriorPipeline.from_pretrained(
+        prior_id,
         torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
         **kwargs
     )
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    return pipe.to(device)
+    prior = prior.to(device)
 
-# 🇹🇷 Görselden görsel üreten fonksiyon
-# 🇬🇧 Image-to-image generation function
+    # 🇹🇷 Decoder pipeline: image_embeds -> final image
+    # 🇬🇧 Decoder pipeline: image_embeds -> final image
+    decoder = KandinskyV22Img2ImgPipeline.from_pretrained(
+        decoder_id,
+        torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+        **kwargs
+    )
+    decoder = decoder.to(device)
+
+    return prior, decoder
+
+# 🇹🇷 img2img oluştur: öncelikle embed üret, sonra decode et
+# 🇬🇧 Image-to-image: first embed, then decode
 def img2img_generate(
-    pipeline: StableDiffusionImg2ImgPipeline,
+    prior_pipe: KandinskyV22PriorPipeline,
+    decoder_pipe: KandinskyV22Img2ImgPipeline,
     input_image: Image.Image,
     prompt: str,
-    strength: float = 0.75,
+    strength: float = 0.5,
+    num_inference_steps: int = 25,
     guidance_scale: float = 7.5
 ) -> Image.Image:
     """
-    🇹🇷 Girdi görselini ve prompt’u kullanarak dönüşüm yapar.
+    🇹🇷 Girdi görseli ve prompt ile dönüşüm yapar.
     🇬🇧 Transforms the input image using the prompt.
 
     Args:
-        pipeline: 🇹🇷 Yüklenmiş pipeline / 🇬🇧 Loaded pipeline
-        input_image: 🇹🇷 Başlangıç görseli / 🇬🇧 Input image
-        prompt: 🇹🇷 Metin komutu / 🇬🇧 Text prompt
-        strength: 🇹🇷 Dönüşüm gücü (0.0–1.0) / 🇬🇧 Transformation strength
-        guidance_scale: 🇹🇷 Prompt sadakati (1.0–15.0) / 🇬🇧 Prompt adherence
+        prior_pipe: 🇹🇷 Prior pipeline
+        decoder_pipe: 🇹🇷 Decoder pipeline
+        input_image (Image.Image): 🇹🇷 Başlangıç görseli / 🇬🇧 Input image
+        prompt (str): 🇹🇷 Metin komutu / 🇬🇧 Text prompt
+        strength (float): 🇹🇷 Ön embed dönüşüm gücü (0.0–1.0) / 🇬🇧 Embedding strength
+        num_inference_steps (int): 🇹🇷 Decoder adım sayısı / 🇬🇧 Decoder inference steps
+        guidance_scale (float): 🇹🇷 Prompt sadakati (1.0–15.0) / 🇬🇧 Guidance scale
 
     Returns:
         Image.Image: 🇹🇷 Üretilen görsel / 🇬🇧 Generated image
     """
-    # 🇹🇷 Görseli RGB’ye çevir ve yeniden boyutlandır
-    # 🇬🇧 Convert to RGB and resize
-    image = input_image.convert("RGB").resize((512, 512))
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    # 🇹🇷 Pipeline’i çalıştır
-    # 🇬🇧 Run the pipeline
-    result = pipeline(
+    # 🇹🇷 Prior pipeline embed üretimi
+    # 🇬🇧 Generate image embeddings
+    prior_output = prior_pipe(
         prompt=prompt,
-        image=image,
-        strength=strength,
+        image=input_image,
+        strength=strength
+    )
+    image_embeds = prior_output.image_embeds
+    negative_embeds = prior_output.negative_image_embeds
+
+    # 🇹🇷 Decoder pipeline ile görsel oluşturma
+    # 🇬🇧 Generate final image via decoder pipeline
+    result = decoder_pipe(
+        image_embeds=image_embeds,
+        negative_image_embeds=negative_embeds,
+        num_inference_steps=num_inference_steps,
         guidance_scale=guidance_scale
     )
+
     return result.images[0]
 
 # 🇹🇷 Test bloğu: Bu dosya doğrudan çalıştırıldığında
-# 🇬🇧 Test block: Run this file directly to check model loading
+# 🇬🇧 Test block when run directly
 if __name__ == "__main__":
-    print("⏳ Model yükleniyor / Loading model...")
-    pipe = load_model()
-    print("✅ Model başarıyla yüklendi! / Model loaded successfully!")
+    print("⏳ Loading Kandinsky 2.2 pipelines...")
+    prior, decoder = load_pipelines()
+    print("✅ Prior and Decoder loaded successfully!")
