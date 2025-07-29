@@ -15,7 +15,7 @@ from PIL import Image
 
 # 🇹🇷 Hugging Face erişimi için token (gerekirse)
 # 🇬🇧 HF access token for private models (if needed)
-HF_TOKEN = os.getenv("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")
+HF_TOKEN = os.getenv("HF_TOKEN")
 
 # 🇹🇷 Modeli yükleyen fonksiyon
 # 🇬🇧 Function to load the Stable Diffusion img2img model
