@@ -1,111 +1,72 @@
 # pipeline.py
 
 """
-🇹🇷 Kandinsky 2.2 img2img modülü:
-- Prior pipeline ile görüntü embed’i oluşturma
-- Decoder pipeline ile img2img oluşturma
-🇬🇧 Kandinsky 2.2 img2img module:
-- Generates image embeddings using the Prior pipeline
-- Generates images using the Decoder pipeline
+Stable Diffusion v1.5 img2img pipeline:
+- Model loading
+- Image-to-image transformation with adjustable strength and guidance_scale
 """
-import os
 import torch
-from diffusers import KandinskyV22PriorPipeline, KandinskyV22Img2ImgPipeline
+from diffusers import StableDiffusionImg2ImgPipeline, EulerAncestralDiscreteScheduler
 from PIL import Image
 
-# 🇹🇷 Gated modellere erişim için token ( gerekiyorsa )
-# 🇬🇧 HF token for accessing gated models (if needed)
-HF_TOKEN = os.getenv("HF_TOKEN")
-
-# 🇹🇷 Tüm pipeline’ları yükler: prior ve decoder
-# 🇬🇧 Load both Prior and Decoder pipelines
-def load_pipelines(
-    prior_id: str = "kandinsky-community/kandinsky-2-2-prior",
-    decoder_id: str = "kandinsky-community/kandinsky-2-2-decoder"
-) -> tuple[KandinskyV22PriorPipeline, KandinskyV22Img2ImgPipeline]:
+# Load Img2Img pipeline and move to device
+def load_img2img(
+    model_id: str = "stable-diffusion-v1-5/stable-diffusion-v1-5"
+) -> StableDiffusionImg2ImgPipeline:
     """
-    🇹🇷 Prior ve Decoder pipeline’larını indirir ve cihaza taşır.
-    🇬🇧 Downloads Prior and Decoder pipelines and moves them to device.
+    Downloads the Img2Img pipeline using the given model_id and moves it to the appropriate device.
+    Falls back to runwayml/stable-diffusion-v1-5 if the specified ID fails.
     """
-    kwargs = {}
-    if HF_TOKEN:
-        kwargs["use_auth_token"] = HF_TOKEN
-
+    try:
+        pipe = StableDiffusionImg2ImgPipeline.from_pretrained(
+            model_id,
+            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+            safety_checker=None
+        )
+    except Exception:
+        pipe = StableDiffusionImg2ImgPipeline.from_pretrained(
+            "runwayml/stable-diffusion-v1-5",
+            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+            safety_checker=None
+        )
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    pipe = pipe.to(device)
+    return pipe
 
-    # 🇹🇷 Prior pipeline: prompt + image -> image_embeds, negative_image_embeds
-    # 🇬🇧 Prior pipeline: prompt + image -> image_embeds, negative_image_embeds
-    prior = KandinskyV22PriorPipeline.from_pretrained(
-        prior_id,
-        torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-        **kwargs
-    )
-    prior = prior.to(device)
-
-    # 🇹🇷 Decoder pipeline: image_embeds -> final image
-    # 🇬🇧 Decoder pipeline: image_embeds -> final image
-    decoder = KandinskyV22Img2ImgPipeline.from_pretrained(
-        decoder_id,
-        torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-        **kwargs
-    )
-    decoder = decoder.to(device)
-
-    return prior, decoder
-
-# 🇹🇷 img2img oluştur: öncelikle embed üret, sonra decode et
-# 🇬🇧 Image-to-image: first embed, then decode
+# Apply img2img transformation with adjustable parameters and negative prompt
 def img2img_generate(
-    prior_pipe: KandinskyV22PriorPipeline,
-    decoder_pipe: KandinskyV22Img2ImgPipeline,
-    input_image: Image.Image,
+    pipe: StableDiffusionImg2ImgPipeline,
+    image: Image.Image,
     prompt: str,
-    strength: float = 0.5,
-    num_inference_steps: int = 25,
+    strength: float = 0.75,
     guidance_scale: float = 7.5
 ) -> Image.Image:
     """
-    🇹🇷 Girdi görseli ve prompt ile dönüşüm yapar.
-    🇬🇧 Transforms the input image using the prompt.
+    Transforms the input image using the text prompt with specified strength and guidance.
+    Uses Euler Ancestral scheduler for conservative editing.
 
     Args:
-        prior_pipe: 🇹🇷 Prior pipeline
-        decoder_pipe: 🇹🇷 Decoder pipeline
-        input_image (Image.Image): 🇹🇷 Başlangıç görseli / 🇬🇧 Input image
-        prompt (str): 🇹🇷 Metin komutu / 🇬🇧 Text prompt
-        strength (float): 🇹🇷 Ön embed dönüşüm gücü (0.0–1.0) / 🇬🇧 Embedding strength
-        num_inference_steps (int): 🇹🇷 Decoder adım sayısı / 🇬🇧 Decoder inference steps
-        guidance_scale (float): 🇹🇷 Prompt sadakati (1.0–15.0) / 🇬🇧 Guidance scale
-
-    Returns:
-        Image.Image: 🇹🇷 Üretilen görsel / 🇬🇧 Generated image
+        pipe: Loaded Img2Img pipeline
+        image: Input PIL image
+        prompt: Text prompt
+        strength: Float (0.0–1.0) degree of transformation
+        guidance_scale: Float prompt adherence strength
     """
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    # 🇹🇷 Prior pipeline embed üretimi
-    # 🇬🇧 Generate image embeddings
-    prior_output = prior_pipe(
+    # Preprocess image
+    img = image.convert("RGB").resize((512, 512))
+    # Swap scheduler for conservative edits
+    pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(pipe.scheduler.config)
+    # Negative prompt to preserve form
+    negative_prompt = (
+        "deformed, distorted, cartoonish, unrealistic, extra limbs, mutated, blurry"
+    )
+    # Run generation
+    output = pipe(
         prompt=prompt,
-        image=input_image,
-        strength=strength
+        negative_prompt=negative_prompt,
+        image=img,
+        strength=strength,
+        guidance_scale=guidance_scale,
+        num_inference_steps=50
     )
-    image_embeds = prior_output.image_embeds
-    negative_embeds = prior_output.negative_image_embeds
-
-    # 🇹🇷 Decoder pipeline ile görsel oluşturma
-    # 🇬🇧 Generate final image via decoder pipeline
-    result = decoder_pipe(
-        image_embeds=image_embeds,
-        negative_image_embeds=negative_embeds,
-        num_inference_steps=num_inference_steps,
-        guidance_scale=guidance_scale
-    )
-
-    return result.images[0]
-
-# 🇹🇷 Test bloğu: Bu dosya doğrudan çalıştırıldığında
-# 🇬🇧 Test block when run directly
-if __name__ == "__main__":
-    print("⏳ Loading Kandinsky 2.2 pipelines...")
-    prior, decoder = load_pipelines()
-    print("✅ Prior and Decoder loaded successfully!")
+    return output.images[0]
