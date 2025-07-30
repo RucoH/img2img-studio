@@ -21,10 +21,17 @@ history_images = []
 def get_presets():
     return {
         "Neon Cat": {"prompt": "A tiny Munchkin cat with short legs on a neon-lit sofa, cyberpunk atmosphere, glowing accents, cinematic lighting.", "style": "Cyberpunk", "strength": 0.75, "guidance_scale": 7.5},
-        "Photo-Realistic": {"prompt": "A close-up portrait of a small Munchkin kitten with short legs, sitting on a soft gray sofa in warm natural light, high detail, photo-realistic.", "style": "Photo", "strength": 0.5, "guidance_scale": 8.0},
+        "Photo-Realistic Cat": {"prompt": "A close-up portrait of a small Munchkin kitten with short legs, sitting on a soft gray sofa in warm natural light, high detail, photo-realistic.", "style": "Photo", "strength": 0.5, "guidance_scale": 8.0},
         "Cartoon Cat": {"prompt": "A stylized cartoon of a Munchkin cat with big round eyes and short legs, playful pose, bold outlines, flat colors.", "style": "Cartoon", "strength": 0.70, "guidance_scale": 8.0},
-        "Oil Painting Cat": {"prompt": "A cute Munchkin kitten with short stubby legs, rendered as an oil painting on canvas, soft brush strokes, muted pastel background.", "style": "Cartoon", "strength": 0.5, "guidance_scale": 8.0}
+        "Oil Painting Cat": {"prompt": "A cute Munchkin kitten with short stubby legs, rendered as an oil painting on canvas, soft brush strokes, muted pastel background.", "style": "Cartoon", "strength": 0.5, "guidance_scale": 8.0},
+        "Astronaut": {"prompt": "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k.", "style": "Photo", "strength": 0.7, "guidance_scale": 13.4},
+
+
     }
+
+
+    #benzer çok benzer tarzında olabilir
+
 
 # Callback to load preset into inputs
 def load_preset(preset_name):
