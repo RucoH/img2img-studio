@@ -159,7 +159,7 @@ with gr.Blocks(theme=theme, title="img2img Lab") as demo:
     )
 
     def make_download(img):
-        path = os.path.join(os.getcwd(), f"download_{uuid.uuid4().hex[:8]}.png")
+        path = os.path.join(os.getcwd(), f".gradio/flagged/Output Image/download_{uuid.uuid4().hex[:8]}.png")
         img.save(path)
         return path
     download_btn.click(make_download, inputs=[output_image], outputs=[gr.File(label="Download")])
