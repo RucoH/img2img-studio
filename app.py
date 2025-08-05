@@ -162,4 +162,4 @@ with gr.Blocks(theme=theme) as demo:
     download_btn.click(make_download, inputs=[output_image], outputs=[gr.File(label="Download")])
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(server_name="0.0.0.0", server_port=7860)
