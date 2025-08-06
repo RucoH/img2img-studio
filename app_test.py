@@ -5,17 +5,51 @@ import math
 import os
 import uuid
 
-# Load single pipeline
+# Load pipeline once
+title = "🧠 img2img Generator"
 pipe = load_img2img("runwayml/stable-diffusion-v1-5")
+try:
+    pipe = pipe.to("cuda")
+    pipe.enable_attention_slicing()
+except:
+    pass
 
 # History storage
 history_images = []
 
-# Directory for local input images
+# Input directory
 INPUT_DIR = ".gradio/flagged/Input Image"
 os.makedirs(INPUT_DIR, exist_ok=True)
 
-# Preset library
+# Helper functions
+def list_local_images():
+    try:
+        return ["None"] + [f for f in os.listdir(INPUT_DIR)
+            if os.path.isfile(os.path.join(INPUT_DIR, f))
+            and f.lower().endswith((".png",".jpg",".jpeg",".webp"))]
+    except:
+        return ["None"]
+
+def load_local_image(filename):
+    if not filename or filename == "None":
+        return None
+    path = os.path.join(INPUT_DIR, filename)
+    try:
+        return Image.open(path).convert("RGB")
+    except:
+        return None
+
+def make_grid(images, cols):
+    rows = math.ceil(len(images) / cols)
+    w, h = images[0].size
+    grid = Image.new("RGB", (cols * w, rows * h))
+    for i, img in enumerate(images):
+        x = (i % cols) * w
+        y = (i // cols) * h
+        grid.paste(img, (x, y))
+    return grid
+
+# Presets and load_preset
 def get_presets():
     return {
         "None": {"prompt": "", "style": "None"},
@@ -26,143 +60,79 @@ def get_presets():
         "Astronaut": {"prompt": "An astronaut floating above Earth with galaxy background, highly detailed, cinematic.", "style": "Photo"},
     }
 
-# List local images
-def list_local_images():
-    return [f for f in os.listdir(INPUT_DIR)
-            if os.path.isfile(os.path.join(INPUT_DIR, f))
-            and f.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))]
-
-# Load a local image by filename
-def load_local_image(filename):
-    if not isinstance(filename, str) or filename == "None":
-        return None
-    path = os.path.join(INPUT_DIR, filename)
-    try:
-        return Image.open(path).convert("RGB")
-    except:
-        return None
-
-# Load preset into prompt/style fields
 def load_preset(preset_name):
     p = get_presets().get(preset_name, {})
     return p.get("prompt", ""), p.get("style", "None")
 
-# Utility to tile images into a grid
-def make_grid(images, cols):
-    rows = math.ceil(len(images) / cols)
-    w, h = images[0].size
-    grid = Image.new("RGB", (cols * w, rows * h))
-    for idx, img in enumerate(images):
-        x = (idx % cols) * w
-        y = (idx // cols) * h
-        grid.paste(img, (x, y))
-    return grid
+# Style-specific settings
+style_settings = {
+    "Cyberpunk": {"strength": 0.4, "guidance": 6.0},
+    "Photo": {"strength": 0.8, "guidance": 7.0},
+    "Cartoon": {"strength": 0.7, "guidance": 5.0},
+    "Oil Painting": {"strength": 0.5, "guidance": 6.0},
+    "None": {"strength": 0.8, "guidance": 7.0},
+}
 
 # Main generation function
-def generate(
-    image: Image.Image,
-    prompt: str,
-    style: str,
-    resolution: str,
-    n_samples: str,
-    scheduler: str,
-    steps: int
-):
-    n = int(n_samples)
+def generate(image, prompt, style, resolution, samples, scheduler, steps):
     if image is None or not prompt.strip():
-        return None, [], "No input or prompt."
-    strength, guidance = 0.8, 7.0
+        return None, history_images, "No input or prompt."
+    cfg = style_settings.get(style, {"strength":0.8, "guidance":7.0})
+    strength, guidance = cfg["strength"], cfg["guidance"]
     if resolution == "Same as Input":
-        width, height = image.size
+        w, h = image.size
     else:
-        width, height = map(int, resolution.split("x"))
-    img = image.resize((width, height))
-    full_prompt = prompt if style == "None" else f"{prompt}, in {style} style"
+        w, h = map(int, resolution.split("x"))
+    if w*h > 2048*2048:
+        return None, history_images, f"Error: {w}x{h} exceeds 2048x2048"
+    img = image.resize((w, h))
+    full_prompt = prompt if style=="None" else f"{prompt}, in {style} style"
+    n = int(samples)
     results, logs = [], []
-    for i in range(1, n + 1):
-        logs.append(f"Generating {i}/{n}...")
+    for i in range(n):
+        logs.append(f"Gen {i+1}/{n} s={strength},g={guidance}")
         out = pipe(
             prompt=full_prompt,
             image=img,
             strength=strength,
             guidance_scale=guidance,
-            height=height,
-            width=width,
-            num_inference_steps=steps
+            height=h,
+            width=w,
+            num_inference_steps=steps,
+            scheduler=scheduler
         ).images[0]
         results.append(out)
-    cols = math.ceil(math.sqrt(n))
-    final = make_grid(results, cols=cols) if n > 1 else results[0]
+    final = make_grid(results, cols=min(n,2)) if n>1 else results[0]
     history_images.append(final)
-    logs.append("Generation complete.")
+    logs.append("Done.")
     return final, history_images, "\n".join(logs)
 
-# Build UI
+# Define UI theme
 theme = gr.themes.Monochrome(primary_hue="green")
-with gr.Blocks(theme=theme, title="img2img Lab") as demo:
-    gr.Markdown("## 🎨 img2img Lab", elem_id="header")
+
+# Build UI
+with gr.Blocks(title=title, theme=theme) as demo:
+    gr.Markdown(f"## {title}")
     with gr.Row():
         with gr.Column(scale=1):
-            input_image = gr.Image(type="pil", label="Input Image")
-            local_sel = gr.Dropdown(
-                choices=["None"] + list_local_images(),
-                value="None",
-                label="Local Images",
-                allow_custom_value=False
-            )
-            local_sel.change(load_local_image, inputs=[local_sel], outputs=[input_image])
-
+            inp = gr.Image(type="pil", label="Input Image")
+            local = gr.Dropdown(list_local_images(), value="None", label="Local Images")
+            local.change(load_local_image, local, inp)
             prompt = gr.Textbox(label="Prompt", lines=2)
-            style = gr.Dropdown(
-                choices=["None", "Cyberpunk", "Photo", "Cartoon", "Oil Painting"],
-                value="None",
-                label="Style",
-                allow_custom_value=False
-            )
-            resolution = gr.Radio(
-                choices=["Same as Input", "512x512", "1024x1024"],
-                value="Same as Input",
-                label="Output Resolution"
-            )
-            n_samples = gr.Dropdown(
-                choices=[str(i) for i in range(1,10)],
-                value="1",
-                label="Number of samples"
-            )
+            style = gr.Dropdown(list(style_settings.keys()), value="None", label="Style")
+            presets = gr.Dropdown(list(get_presets().keys()), value="None", label="Presets")
+            presets.change(load_preset, presets, [prompt, style])
+            resolution = gr.Radio(["Same as Input","512x512","1024x1024","2048x2048"], value="Same as Input", label="Output Resolution")
+            samples = gr.Dropdown([str(i) for i in range(1,5)], value="1", label="Samples")
             with gr.Accordion("Advanced Settings", open=False):
-                scheduler = gr.Dropdown(
-                    choices=["DDIM", "Euler A", "PNDM"],
-                    value="DDIM",
-                    label="Scheduler"
-                )
-                steps = gr.Slider(1, 100, value=50, step=1, label="Inference steps")
-            preset_sel = gr.Dropdown(
-                choices=["None"] + [k for k in get_presets() if k != "None"],
-                value="None",
-                label="Presets",
-                allow_custom_value=False
-            )
-            load_btn = gr.Button("Load Preset")
-            load_btn.click(load_preset, inputs=[preset_sel], outputs=[prompt, style])
-            generate_btn = gr.Button("Generate", variant="primary")
-
+                scheduler = gr.Dropdown(["DDIM","Euler A","PNDM"], value="DDIM", label="Scheduler")
+                steps = gr.Slider(1,100,value=30,step=1,label="Inference Steps")
+            gen = gr.Button("Generate", variant="primary")
         with gr.Column(scale=1):
-            output_image = gr.Image(type="pil", label="Output Image")
-            download_btn = gr.Button("Download Image")
-            history_gallery = gr.Gallery(label="History", columns=2, height="auto")
-            log_box = gr.Textbox(label="Logs", interactive=False)
-
-    generate_btn.click(
-        generate,
-        inputs=[input_image, prompt, style, resolution, n_samples, scheduler, steps],
-        outputs=[output_image, history_gallery, log_box]
-    )
-
-    def make_download(img):
-        path = os.path.join(os.getcwd(), f".gradio/flagged/Output Image/download_{uuid.uuid4().hex[:8]}.png")
-        img.save(path)
-        return path
-    download_btn.click(make_download, inputs=[output_image], outputs=[gr.File(label="Download")])
+            out = gr.Image(label="Output")
+            gallery = gr.Gallery(label="History", columns=2)
+            logs = gr.Textbox(label="Logs")
+    gen.click(generate, [inp, prompt, style, resolution, samples, scheduler, steps], [out, gallery, logs])
 
 if __name__ == "__main__":
-    demo.launch(favicon_path=".gradio/favicon.ico")
+    demo.launch()

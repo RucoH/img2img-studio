@@ -1,0 +1,32 @@
+# docker-compose.yml
+version: "3.8"
+
+services:
+  img2img-studio:
+    build:
+      context: .
+      dockerfile: Dockerfile          # senin multi‐stage Dockerfile
+      target: final                   # en son aşama (kod + cache)
+    image: img2img-studio:latest
+    # GPU desteği (Docker Compose v2+)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: "nvidia"
+              count: -1              # tüm GPU’ları kullan
+              capabilities: ["gpu"]
+    # Eğer deploy.device_requests çalışmıyorsa aşağıyı deneyebilirsin:
+    # device_requests:
+    #   - driver: "nvidia"
+    #     count: -1
+    #     capabilities: ["gpu"]
+    ports:
+      - "7860:7860"
+    volumes:
+      - ./:/app                       # kodu anında yansıt
+      - $HOME/.cache/huggingface:/root/.cache/huggingface   # model cache
+    environment:
+      - HF_HOME=/root/.cache/huggingface
+      - PYTHONUNBUFFERED=1
+    command: ["python", "app.py", "--server-name", "0.0.0.0", "--server-port", "7860"]
